@@ -1,0 +1,166 @@
+scripting:
+  files:
+  - data: "MIME-Version: 1.0\r\nMessage-ID: <b604dde3-12fb-11f1-b164-2bf370ae4941@se1-gles-sth1.inumbo.com>\r\
+      \nDate: Thu, 26 Feb 2026 11:12:52 +0100\r\nFrom: <sender@example.org>\r\nTo:\
+      \ <recipient@example.com>\r\nSubject: Hello World\r\nContent-Type: multipart/alternative;\r\
+      \n boundary=\"b604e38c-12fb-11f1-b164-2bf370ae4941\"\r\n\r\n--b604e38c-12fb-11f1-b164-2bf370ae4941\r\
+      \nContent-Type: text/plain; charset=utf-8\r\n\r\n*Hello World*\r\n--b604e38c-12fb-11f1-b164-2bf370ae4941\r\
+      \nContent-Type: text/html; charset=utf-8\r\n\r\n<strong>Hello World</strong>\r\
+      \n--b604e38c-12fb-11f1-b164-2bf370ae4941--\r\n"
+    id: test.eml
+  - data: |
+      import $mime from "txt!test.eml";
+      import $pubkeyring from "txt!test.pub.asc";
+      import $privkeyring from "txt!test.priv.asc";
+      import { pgp_is_signed_mime, pgp_sign_mime, pgp_verify_mime, pgp_is_encrypted_mime, pgp_encrypt_mime, pgp_decrypt_mime } from "file://pgp-mime.hsl";
+
+      // Test 1 (Sign + Verify)
+      $mail = MailMessage::String($mime);
+      $expect = $mail->getBody();
+      pgp_sign_mime($mail, [$privkeyring], ["profile" => "default"]);
+      $signed = MailMessage::String($mail->toString());
+      pgp_verify_mime($signed, [$pubkeyring], ["profile" => "default"]);
+      $verified = MailMessage::String($signed->toString());
+      $result = $verified->getBody();
+      if ($expect !== $result)
+          throw Exception("Test 1 (Sign + Verify): FAILED\nRESULT($result)\nEXPECT($expect)");
+      echo "Test 1 (Sign + Verify):\t\t\t\tOK";
+
+      // Test 2 (Sign + Encrypt & Decrypt + Verify)
+      $mail = MailMessage::String($mime);
+      $expect = $mail->getBody();
+      pgp_encrypt_mime($mail, [$pubkeyring], [$privkeyring], ["profile" => "default"]);
+      $encrypted = MailMessage::String($mail->toString());
+      pgp_decrypt_mime($encrypted, [$privkeyring], [$pubkeyring], ["profile" => "default"]);
+      $decrypted = MailMessage::String($encrypted->toString());
+      $result = $decrypted->getBody();
+      if ($expect !== $result)
+          throw Exception("Test 2 (Sign + Encrypt & Decrypt + Verify): FAILED\nRESULT($result)\nEXPECT($expect)");
+      echo "Test 2 (Sign + Encrypt & Decrypt + Verify):\tOK";
+
+      // Test 3 (Verify)
+      $mail = MailMessage::String($mime);
+      $expect = ["result"=>true,"signers"=>[0=>''-----BEGIN PGP PUBLIC KEY BLOCK-----
+
+      xjMEaYRHMxYJKwYBBAHaRw8BAQdAeys1HObh1T/52MyemnXSSBKGcGroexC+HvTf
+      D+83WeTNH0phbmUgRG9lIDxqYW5lLmRvZUBleGFtcGxlLmNvbT7CkwQTFgoAOxYh
+      BLLciu3Pt1+M33uRHPGl+Kn/XCQaBQJphEczAhsDBQsJCAcCAiICBhUKCQgLAgQW
+      AgMBAh4HAheAAAoJEPGl+Kn/XCQazm4A/A8hXrCwRnTdAh25IruJtH6SNnljznQX
+      M3JUg6PYx61MAQCo9yo50vjAUXE7YDLSpoF8imtXxaurEX/l2Yyvc84bAs44BGmE
+      RzMSCisGAQQBl1UBBQEBB0C3hYG+Scszkyw83DkUD9jKwFJoGl7GR0MT8ddAOd+y
+      XwMBCAfCeAQYFgoAIBYhBLLciu3Pt1+M33uRHPGl+Kn/XCQaBQJphEczAhsMAAoJ
+      EPGl+Kn/XCQaCRkA/3LIxSlDRZ638mCSsG8cLllEElfGOjTbnEvuJ8AA/w95AP0Z
+      MYLXiY/jaRdbAiK/F7X/cYcgtxYAA8hEptD3Cu3+Dg==
+      =cAcn
+      -----END PGP PUBLIC KEY BLOCK-----'']];
+      pgp_sign_mime($mail, [$privkeyring], ["profile" => "default"]);
+      $signed = MailMessage::String($mail->toString());
+      $result = pgp_verify_mime($signed, [$pubkeyring], ["profile" => "default"]);
+      if (json_encode($result) !== json_encode($expect))
+          throw Exception("Test 3 (Verify): FAILED\nRESULT($result)\nEXPECT($expect)");
+      echo "Test 3 (Verify):\t\t\t\tOK";
+
+      // Test 4 (Decrypt + Verify)
+      $mail = MailMessage::String($mime);
+      $expect = ["result"=>true,"signers"=>[0=>''-----BEGIN PGP PUBLIC KEY BLOCK-----
+
+      xjMEaYRHMxYJKwYBBAHaRw8BAQdAeys1HObh1T/52MyemnXSSBKGcGroexC+HvTf
+      D+83WeTNH0phbmUgRG9lIDxqYW5lLmRvZUBleGFtcGxlLmNvbT7CkwQTFgoAOxYh
+      BLLciu3Pt1+M33uRHPGl+Kn/XCQaBQJphEczAhsDBQsJCAcCAiICBhUKCQgLAgQW
+      AgMBAh4HAheAAAoJEPGl+Kn/XCQazm4A/A8hXrCwRnTdAh25IruJtH6SNnljznQX
+      M3JUg6PYx61MAQCo9yo50vjAUXE7YDLSpoF8imtXxaurEX/l2Yyvc84bAs44BGmE
+      RzMSCisGAQQBl1UBBQEBB0C3hYG+Scszkyw83DkUD9jKwFJoGl7GR0MT8ddAOd+y
+      XwMBCAfCeAQYFgoAIBYhBLLciu3Pt1+M33uRHPGl+Kn/XCQaBQJphEczAhsMAAoJ
+      EPGl+Kn/XCQaCRkA/3LIxSlDRZ638mCSsG8cLllEElfGOjTbnEvuJ8AA/w95AP0Z
+      MYLXiY/jaRdbAiK/F7X/cYcgtxYAA8hEptD3Cu3+Dg==
+      =cAcn
+      -----END PGP PUBLIC KEY BLOCK-----'']];
+      pgp_encrypt_mime($mail, [$pubkeyring], [$privkeyring], ["profile" => "default"]);
+      $encrypted = MailMessage::String($mail->toString());
+      $result = pgp_decrypt_mime($encrypted, [$privkeyring], [$pubkeyring], ["profile" => "default"]);
+      if (json_encode($result) !== json_encode($expect))
+          throw Exception("Test 4 (Decrypt + Verify): FAILED\nRESULT($result)\nEXPECT($expect)");
+      echo "Test 4 (Decrypt + Verify):\t\t\tOK";
+
+      // Test 5 (Decrypt)
+      $mail = MailMessage::String($mime);
+      $expect = ["result"=>true];
+      pgp_encrypt_mime($mail, [$pubkeyring], [$privkeyring], ["profile" => "default"]);
+      $encrypted = MailMessage::String($mail->toString());
+      $result = pgp_decrypt_mime($encrypted, [$privkeyring], none, ["profile" => "default"]);
+      if (json_encode($result) !== json_encode($expect))
+          throw Exception("Test 5 (Decrypt): FAILED\nRESULT($result)\nEXPECT($expect)");
+      echo "Test 5 (Decrypt):\t\t\t\tOK";
+
+      // Test 6 (Is signed)
+      $mail = MailMessage::String($mime);
+      $expect = true;
+      pgp_sign_mime($mail, [$privkeyring], ["profile" => "default"]);
+      $signed = MailMessage::String($mail->toString());
+      $result = pgp_is_signed_mime($signed);
+      if (json_encode($result) !== json_encode($expect))
+          throw Exception("Test 7 (Is signed): FAILED\nRESULT($result)\nEXPECT($expect)");
+      echo "Test 7 (Is signed):\t\t\t\tOK";
+
+      // Test 7 (Is encrypted)
+      $mail = MailMessage::String($mime);
+      $expect = true;
+      pgp_encrypt_mime($mail, [$pubkeyring], [$privkeyring], ["profile" => "default"]);
+      $encrypted = MailMessage::String($mail->toString());
+      $result = pgp_is_encrypted_mime($encrypted);
+      if (json_encode($result) !== json_encode($expect))
+          throw Exception("Test 7 (Is encrypted): FAILED\nRESULT($result)\nEXPECT($expect)");
+      echo "Test 7 (Is encrypted):\t\t\t\tOK";
+
+      // Test 8 (Is not signed)
+      $mail = MailMessage::String($mime);
+      $expect = false;
+      $result = pgp_is_signed_mime($mail);
+      if (json_encode($result) !== json_encode($expect))
+          throw Exception("Test 8 (Is not signed): FAILED\nRESULT($result)\nEXPECT($expect)");
+      echo "Test 8 (Is not signed):\t\t\t\tOK";
+
+      // Test 9 (Is not encrypted)
+      $mail = MailMessage::String($mime);
+      $expect = false;
+      $result = pgp_is_encrypted_mime($mail);
+      if (json_encode($result) !== json_encode($expect))
+          throw Exception("Test 9 (Is not encrypted): FAILED\nRESULT($result)\nEXPECT($expect)");
+      echo "Test 9 (Is not encrypted):\t\t\tOK";
+    id: test.hsl
+  - data: |
+      -----BEGIN PGP PRIVATE KEY BLOCK-----
+
+      lFgEaYRHMxYJKwYBBAHaRw8BAQdAeys1HObh1T/52MyemnXSSBKGcGroexC+HvTf
+      D+83WeQAAP9DzJmKpcr/75iZUlNEg/QOmWJ6tCHr5mtG8EYFVMqk3BLStB9KYW5l
+      IERvZSA8amFuZS5kb2VAZXhhbXBsZS5jb20+iJMEExYKADsWIQSy3Irtz7dfjN97
+      kRzxpfip/1wkGgUCaYRHMwIbAwULCQgHAgIiAgYVCgkICwIEFgIDAQIeBwIXgAAK
+      CRDxpfip/1wkGs5uAPwPIV6wsEZ03QIduSK7ibR+kjZ5Y850FzNyVIOj2MetTAEA
+      qPcqOdL4wFFxO2Ay0qaBfIprV8WrqxF/5dmMr3POGwKcXQRphEczEgorBgEEAZdV
+      AQUBAQdAt4WBvknLM5MsPNw5FA/YysBSaBpexkdDE/HXQDnfsl8DAQgHAAD/UCnH
+      L6xIj6xpB6pODerYzsxXZm0nuZR2+aXiGJpcHGAQjIh4BBgWCgAgFiEEstyK7c+3
+      X4zfe5Ec8aX4qf9cJBoFAmmERzMCGwwACgkQ8aX4qf9cJBoJGQD/csjFKUNFnrfy
+      YJKwbxwuWUQSV8Y6NNucS+4nwAD/D3kA/RkxgteJj+NpF1sCIr8Xtf9xhyC3FgAD
+      yESm0PcK7f4O
+      =2/el
+      -----END PGP PRIVATE KEY BLOCK-----
+    id: test.priv.asc
+  - data: |
+      -----BEGIN PGP PUBLIC KEY BLOCK-----
+
+      mDMEaYRHMxYJKwYBBAHaRw8BAQdAeys1HObh1T/52MyemnXSSBKGcGroexC+HvTf
+      D+83WeS0H0phbmUgRG9lIDxqYW5lLmRvZUBleGFtcGxlLmNvbT6IkwQTFgoAOxYh
+      BLLciu3Pt1+M33uRHPGl+Kn/XCQaBQJphEczAhsDBQsJCAcCAiICBhUKCQgLAgQW
+      AgMBAh4HAheAAAoJEPGl+Kn/XCQazm4A/A8hXrCwRnTdAh25IruJtH6SNnljznQX
+      M3JUg6PYx61MAQCo9yo50vjAUXE7YDLSpoF8imtXxaurEX/l2Yyvc84bArg4BGmE
+      RzMSCisGAQQBl1UBBQEBB0C3hYG+Scszkyw83DkUD9jKwFJoGl7GR0MT8ddAOd+y
+      XwMBCAeIeAQYFgoAIBYhBLLciu3Pt1+M33uRHPGl+Kn/XCQaBQJphEczAhsMAAoJ
+      EPGl+Kn/XCQaCRkA/3LIxSlDRZ638mCSsG8cLllEElfGOjTbnEvuJ8AA/w95AP0Z
+      MYLXiY/jaRdbAiK/F7X/cYcgtxYAA8hEptD3Cu3+Dg==
+      =rCCc
+      -----END PGP PUBLIC KEY BLOCK-----
+    id: test.pub.asc
+servers:
+- id: default
+  transport: mx
+version: '6.10'

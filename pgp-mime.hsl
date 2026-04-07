@@ -1,0 +1,188 @@
+import { pgp_sign, pgp_verify, pgp_encrypt, pgp_decrypt } from "extras://pgp";
+
+function pgp_is_signed_mime($mail)
+{
+	return $mail->getType() == "multipart/signed" and
+		$mail->getTypeParameter("protocol") == "application/pgp-signature";
+}
+
+function pgp_sign_mime($mail, $privkeyrings = [], $opts = [])
+{
+	$headersadded = [];
+	$headers = array_join(array_reduce(function($x, $y) closure ($headersadded, $mail) {
+		if ($y[0:8] == "content-")
+			return [...$x, $mail->getHeader($y, [
+						"field" => true,
+						"index" => $headersadded[$y] !== none ? ++$headersadded[$y] : $headersadded[$y] = 0
+					])];
+		return $x;
+	}, $mail->getHeaderNames(), []));
+	$body = $mail->getBody(["decode" => false]);
+	if ($body === none)
+		return ["result" => false];
+
+	$data = $headers."\r\n".$body;
+
+	$signed = pgp_sign($data, $privkeyrings, [...$opts, "detached" => true]);
+	if (!$signed["result"]) {
+		return ["result" => false];
+	}
+	$algorithm = $signed["algorithm"];
+
+	$boundary = uuid();
+	$mail->delHeader("Content-Type");
+	$mail->delHeader("Content-Transfer-Encoding");
+	$mail->delHeader("Content-Disposition");
+	$mail->addHeader("Content-Type", "multipart/signed; protocol=\"application/pgp-signature\"; micalg=$algorithm; boundary=\"$boundary\"");
+	$mime = MIME()
+		->setBoundary($boundary)
+		->appendPart(MailMessage::String($data))
+		->appendPart(MIME()
+						->addHeader("Content-Transfer-Encoding", "7bit")
+						->addHeader("Content-Description", "PGP digital signature")
+						->setType(''application/pgp-signature; name="signature.asc"'')
+						->setFileName("signature.asc")
+						->setDisposition("attachment")
+						->setBody($signed["data"]));
+	$mail->setBody(MailMessage::String($mime->toString())->getBody());
+	return ["result" => true];
+}
+
+function pgp_verify_mime($mail, $pubkeyrings = [], $opts = [])
+{
+	if ($mail->getType() == "multipart/signed" and
+		$mail->getTypeParameter("protocol") == "application/pgp-signature")
+	{
+		if (length($mail->getParts()) != 2)
+			return ["result" => false];
+
+		$signature = array_find(function ($part) {
+			return $part->getType() == "application/pgp-signature";
+		}, $mail->getParts());
+
+		if (!$signature)
+			return ["result" => false];
+
+		$body = array_find(function ($part) closure ($signature) {
+			return $part->getID() != $signature->getID();
+		}, $mail->getParts());
+
+		$headersadded = [];
+		$headers = array_join(array_reduce(function($x, $y) closure ($headersadded, $body) {
+			return [...$x, $body->getHeader($y, [
+						"field" => true,
+						"index" => $headersadded[$y] !== none ? ++$headersadded[$y] : $headersadded[$y] = 0
+					])];
+		}, $body->getHeaderNames(), []));
+		$body = $body->getBody(["decode" => false]);
+		if ($body === none)
+			return ["result" => false];
+
+		$data = $headers."\r\n".$body;
+
+		$verified = pgp_verify($data, $pubkeyrings, [...$opts, "signature" => $signature->getBody()]);
+		if (!$verified["result"]) {
+			return ["result" => false];
+		}
+
+		$part = MailMessage::String($data);
+		/* xxx: are we allowed to copy all headers or just content? */
+		foreach ($part->getHeaderNames() as $n)
+			if ($v = $part->getHeader($n))
+				$mail->setHeader($n, $v);
+		$mail->delHeader("Content-Type");
+		$mail->delHeader("Content-Transfer-Encoding");
+		$mail->delHeader("Content-Disposition");
+		$encoding = $part->getHeader("Content-Transfer-Encoding") ?: "7bit";
+		$mail->setBody($part->getBody(["decode" => false]), ["encoding" => $encoding]);
+		return ["result" => true, "signers" => $verified["signers"]];
+	}
+	return ["result" => false];
+}
+
+function pgp_is_encrypted_mime($mail)
+{
+	return $mail->getType() == "multipart/encrypted" and
+		$mail->getTypeParameter("protocol") == "application/pgp-encrypted";
+}
+
+function pgp_encrypt_mime($mail, $pubkeyrings, $privkeyrings = [], $opts = [])
+{
+	$headersadded = [];
+	$headers = array_join(array_reduce(function($x, $y) closure ($headersadded, $mail) {
+		if ($y[0:8] == "content-")
+			return [...$x, $mail->getHeader($y, [
+						"field" => true,
+						"index" => $headersadded[$y] !== none ? ++$headersadded[$y] : $headersadded[$y] = 0
+					])];
+		return $x;
+	}, $mail->getHeaderNames(), []));
+	$body = $mail->getBody(["decode" => false]);
+	if ($body === none)
+		return ["result" => false];
+
+	$data = $headers."\r\n".$body;
+
+	$encrypted = pgp_encrypt($data, $pubkeyrings, $privkeyrings, $opts);
+	if (!$encrypted["result"]) {
+		return ["result" => false];
+	}
+
+	$boundary = uuid();
+	$mail->delHeader("Content-Type");
+	$mail->delHeader("Content-Transfer-Encoding");
+	$mail->delHeader("Content-Disposition");
+	$mail->addHeader("Content-Type", "multipart/encrypted; protocol=\"application/pgp-encrypted\"; boundary=\"$boundary\"");
+	$mime = MIME()
+		->setBoundary($boundary)
+		->appendPart(MIME()
+						->addHeader("Content-Transfer-Encoding", "7bit")
+						->addHeader("Content-Description", "PGP/MIME version identification")
+						->setType("application/pgp-encrypted")
+						->setBody("Version: 1"))
+		->appendPart(MIME()
+						->addHeader("Content-Transfer-Encoding", "7bit")
+						->addHeader("Content-Description", "PGP encrypted message")
+						->setType(''application/octet-stream; name="encrypted.asc"'')
+						->setFileName("encrypted.asc")
+						->setDisposition("inline")
+						->setBody($encrypted["data"]));
+	$mail->setBody(MailMessage::String($mime->toString())->getBody());
+	return ["result" => true];
+}
+
+function pgp_decrypt_mime($mail, $privkeyrings, $pubkeyrings = none, $opts = [])
+{
+	if ($mail->getType() == "multipart/encrypted" and
+		$mail->getTypeParameter("protocol") == "application/pgp-encrypted")
+	{
+		if (length($mail->getParts()) != 2)
+			return ["result" => false];
+
+		$ostream = array_find(function ($part) {
+			return $part->getType() == "application/octet-stream";
+		}, $mail->getParts());
+
+		$decrypted = pgp_decrypt($ostream->getBody(), $privkeyrings, $pubkeyrings, $opts);
+		if (!$decrypted["result"]) {
+			return ["result" => false];
+		}
+
+		$part = MailMessage::String($decrypted["data"]);
+		/* xxx: are we allowed to copy all headers or just content? */
+		foreach ($part->getHeaderNames() as $n)
+			if ($v = $part->getHeader($n))
+				$mail->setHeader($n, $v);
+		$mail->delHeader("Content-Type");
+		$mail->delHeader("Content-Transfer-Encoding");
+		$mail->delHeader("Content-Disposition");
+		$encoding = $part->getHeader("Content-Transfer-Encoding") ?: "7bit";
+		$mail->setBody($part->getBody(["decode" => false]), ["encoding" => $encoding]);
+		if ($pubkeyrings != none) {
+			return ["result" => true, "signers" => $decrypted["signers"]];
+		} else {
+			return ["result" => true];
+		}
+	}
+	return ["result" => false];
+}
