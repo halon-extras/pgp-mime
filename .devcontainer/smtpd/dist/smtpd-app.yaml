@@ -24,7 +24,7 @@ scripting:
       $result = $verified->getBody();
       if ($expect !== $result)
           throw Exception("Test 1 (Sign + Verify): FAILED\nRESULT($result)\nEXPECT($expect)");
-      echo "Test 1 (Sign + Verify):\t\t\t\tOK";
+      echo "Test 1 (Sign + Verify):\t\t\t\t\tOK";
 
       // Test 2 (Sign + Encrypt & Decrypt + Verify)
       $mail = MailMessage::String($mime);
@@ -36,7 +36,7 @@ scripting:
       $result = $decrypted->getBody();
       if ($expect !== $result)
           throw Exception("Test 2 (Sign + Encrypt & Decrypt + Verify): FAILED\nRESULT($result)\nEXPECT($expect)");
-      echo "Test 2 (Sign + Encrypt & Decrypt + Verify):\tOK";
+      echo "Test 2 (Sign + Encrypt & Decrypt + Verify):\t\tOK";
 
       // Test 3 (Verify)
       $mail = MailMessage::String($mime);
@@ -58,7 +58,7 @@ scripting:
       $result = pgp_verify_mime($signed, [$pubkeyring], ["profile" => "default"]);
       if (json_encode($result) !== json_encode($expect))
           throw Exception("Test 3 (Verify): FAILED\nRESULT($result)\nEXPECT($expect)");
-      echo "Test 3 (Verify):\t\t\t\tOK";
+      echo "Test 3 (Verify):\t\t\t\t\tOK";
 
       // Test 4 (Decrypt + Verify)
       $mail = MailMessage::String($mime);
@@ -80,7 +80,7 @@ scripting:
       $result = pgp_decrypt_mime($encrypted, [$privkeyring], [$pubkeyring], ["profile" => "default"]);
       if (json_encode($result) !== json_encode($expect))
           throw Exception("Test 4 (Decrypt + Verify): FAILED\nRESULT($result)\nEXPECT($expect)");
-      echo "Test 4 (Decrypt + Verify):\t\t\tOK";
+      echo "Test 4 (Decrypt + Verify):\t\t\t\tOK";
 
       // Test 5 (Decrypt)
       $mail = MailMessage::String($mime);
@@ -90,7 +90,7 @@ scripting:
       $result = pgp_decrypt_mime($encrypted, [$privkeyring], none, ["profile" => "default"]);
       if (json_encode($result) !== json_encode($expect))
           throw Exception("Test 5 (Decrypt): FAILED\nRESULT($result)\nEXPECT($expect)");
-      echo "Test 5 (Decrypt):\t\t\t\tOK";
+      echo "Test 5 (Decrypt):\t\t\t\t\tOK";
 
       // Test 6 (Is signed)
       $mail = MailMessage::String($mime);
@@ -100,7 +100,7 @@ scripting:
       $result = pgp_is_signed_mime($signed);
       if (json_encode($result) !== json_encode($expect))
           throw Exception("Test 7 (Is signed): FAILED\nRESULT($result)\nEXPECT($expect)");
-      echo "Test 7 (Is signed):\t\t\t\tOK";
+      echo "Test 7 (Is signed):\t\t\t\t\tOK";
 
       // Test 7 (Is encrypted)
       $mail = MailMessage::String($mime);
@@ -110,7 +110,7 @@ scripting:
       $result = pgp_is_encrypted_mime($encrypted);
       if (json_encode($result) !== json_encode($expect))
           throw Exception("Test 7 (Is encrypted): FAILED\nRESULT($result)\nEXPECT($expect)");
-      echo "Test 7 (Is encrypted):\t\t\t\tOK";
+      echo "Test 7 (Is encrypted):\t\t\t\t\tOK";
 
       // Test 8 (Is not signed)
       $mail = MailMessage::String($mime);
@@ -118,7 +118,7 @@ scripting:
       $result = pgp_is_signed_mime($mail);
       if (json_encode($result) !== json_encode($expect))
           throw Exception("Test 8 (Is not signed): FAILED\nRESULT($result)\nEXPECT($expect)");
-      echo "Test 8 (Is not signed):\t\t\t\tOK";
+      echo "Test 8 (Is not signed):\t\t\t\t\tOK";
 
       // Test 9 (Is not encrypted)
       $mail = MailMessage::String($mime);
@@ -126,7 +126,19 @@ scripting:
       $result = pgp_is_encrypted_mime($mail);
       if (json_encode($result) !== json_encode($expect))
           throw Exception("Test 9 (Is not encrypted): FAILED\nRESULT($result)\nEXPECT($expect)");
-      echo "Test 9 (Is not encrypted):\t\t\tOK";
+      echo "Test 9 (Is not encrypted):\t\t\t\tOK";
+
+      // Test 10 (Sign + Verify (Without stripping signature))
+      $mail = MailMessage::String($mime);
+      $expect = true;
+      pgp_sign_mime($mail, [$privkeyring], ["profile" => "default"]);
+      $signed = MailMessage::String($mail->toString());
+      pgp_verify_mime($signed, [$pubkeyring], ["profile" => "default", "strip_signature" => false]);
+      $verified = MailMessage::String($signed->toString());
+      $result = pgp_is_signed_mime($verified);
+      if ($expect !== $result)
+          throw Exception("Test 10 (Sign + Verify (Without stripping signature)): FAILED\nRESULT($result)\nEXPECT($expect)");
+      echo "Test 10 (Sign + Verify (Without stripping signature)):\tOK";
     id: test.hsl
   - data: |
       -----BEGIN PGP PRIVATE KEY BLOCK-----

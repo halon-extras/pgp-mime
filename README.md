@@ -51,6 +51,7 @@ PGP verify a MIME message. Invalid or missing arguments will case an exception t
 The following options are available in the **options** array.
 
 - profile `string` - The profile to use (One of `default`, `rfc4880` or `rfc9580`)
+- strip_signature `boolean` - If the signature should be removed (altering the message). The default is `true`.
 
 **Returns**
 

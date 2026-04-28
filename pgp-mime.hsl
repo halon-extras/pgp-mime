@@ -85,16 +85,20 @@ function pgp_verify_mime($mail, $pubkeyrings = [], $opts = [])
 			return ["result" => false];
 		}
 
-		$part = MailMessage::String($data);
-		/* xxx: are we allowed to copy all headers or just content? */
-		foreach ($part->getHeaderNames() as $n)
-			if ($v = $part->getHeader($n))
-				$mail->setHeader($n, $v);
-		$mail->delHeader("Content-Type");
-		$mail->delHeader("Content-Transfer-Encoding");
-		$mail->delHeader("Content-Disposition");
-		$encoding = $part->getHeader("Content-Transfer-Encoding") ?: "7bit";
-		$mail->setBody($part->getBody(["decode" => false]), ["encoding" => $encoding]);
+		if ($opts["strip_signature"] ?? true)
+		{
+			$part = MailMessage::String($data);
+			/* xxx: are we allowed to copy all headers or just content? */
+			foreach ($part->getHeaderNames() as $n)
+				if ($v = $part->getHeader($n))
+					$mail->setHeader($n, $v);
+			$mail->delHeader("Content-Type");
+			$mail->delHeader("Content-Transfer-Encoding");
+			$mail->delHeader("Content-Disposition");
+			$encoding = $part->getHeader("Content-Transfer-Encoding") ?: "7bit";
+			$mail->setBody($part->getBody(["decode" => false]), ["encoding" => $encoding]);
+		}
+
 		return ["result" => true, "signers" => $verified["signers"]];
 	}
 	return ["result" => false];
