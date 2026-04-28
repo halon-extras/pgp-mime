@@ -133,7 +133,7 @@ scripting:
       $expect = true;
       pgp_sign_mime($mail, [$privkeyring], ["profile" => "default"]);
       $signed = MailMessage::String($mail->toString());
-      $verifyresult = pgp_verify_mime($signed, [$pubkeyring], ["profile" => "default", "strip_signature" => true]);
+      $verifyresult = pgp_verify_mime($signed, [$pubkeyring], ["profile" => "default", "strip_signature" => false]);
       $verified = MailMessage::String($signed->toString());
       $result = pgp_is_signed_mime($verified);
       if ($verifyresult["result"] !== true or $expect !== $result)
