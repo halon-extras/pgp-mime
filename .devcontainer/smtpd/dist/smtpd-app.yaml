@@ -133,10 +133,10 @@ scripting:
       $expect = true;
       pgp_sign_mime($mail, [$privkeyring], ["profile" => "default"]);
       $signed = MailMessage::String($mail->toString());
-      pgp_verify_mime($signed, [$pubkeyring], ["profile" => "default", "strip_signature" => false]);
+      $verifyresult = pgp_verify_mime($signed, [$pubkeyring], ["profile" => "default", "strip_signature" => true]);
       $verified = MailMessage::String($signed->toString());
       $result = pgp_is_signed_mime($verified);
-      if ($expect !== $result)
+      if ($verifyresult["result"] !== true or $expect !== $result)
           throw Exception("Test 10 (Sign + Verify (Without stripping signature)): FAILED\nRESULT($result)\nEXPECT($expect)");
       echo "Test 10 (Sign + Verify (Without stripping signature)):\tOK";
     id: test.hsl
